@@ -1,0 +1,7 @@
+# Paths gitignored but required in every worktree.
+# scripts/setup-worktree.sh copies these from the main worktree
+# into a newly created one. One path per line, relative to repo root.
+
+environments/local.env
+environments/devel.env
+web/.env.local

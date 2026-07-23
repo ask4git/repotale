@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: repotale
+      POSTGRES_PASSWORD: repotale
+      POSTGRES_DB: repotale
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  web:
+    build: ./web
+    env_file:
+      - environments/${APP_ENV:-local}.env
+    environment:
+      DATABASE_URL: postgresql://repotale:repotale@db:5432/repotale
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      - db
+
+volumes:
+  db-data:

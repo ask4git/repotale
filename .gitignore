@@ -1,0 +1,29 @@
+# env (secrets) - keep only *.env.example tracked
+environments/*.env
+!environments/*.env.example
+.env
+.env.*
+!.env.example
+
+# node / web
+web/node_modules/
+web/.next/
+web/out/
+web/coverage/
+web/*.tsbuildinfo
+web/next-env.d.ts
+
+# go / cli
+cli/bin/
+cli/dist/
+*.exe
+
+# docker
+docker/data/
+
+# os / editor
+.DS_Store
+*.log
+
+# worktrees created alongside this repo
+/worktrees/
