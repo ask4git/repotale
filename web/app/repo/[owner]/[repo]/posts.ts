@@ -1,12 +1,4 @@
-export type Post = {
-  slug: string;
-  title: string;
-  excerpt: string;
-  tags: string[];
-  prNumber: number;
-  prUrl: string;
-  publishedAt: string;
-};
+import type { Post } from "@/lib/types";
 
 // ponytail: hardcoded demo content from the manual prompt experiment
 // (experiments/prompt-test/). Swap for the real analysis pipeline's output
