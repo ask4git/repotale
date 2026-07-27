@@ -1,5 +1,6 @@
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { TopNav } from "@/components/top-nav";
 import { RepoList } from "./repo-list";
 
 async function fetchRepos(accessToken: string) {
@@ -18,18 +19,19 @@ export default async function ConnectPage() {
   const repos = await fetchRepos(session.accessToken!);
 
   return (
-    <main>
-      <h1>연동할 repo를 선택하세요</h1>
-      <p>{session.user?.name ?? session.user?.email}로 로그인됨</p>
-      <form
-        action={async () => {
-          "use server";
-          await signOut({ redirectTo: "/login" });
-        }}
-      >
-        <button type="submit">로그아웃</button>
-      </form>
-      <RepoList repos={repos} />
-    </main>
+    <>
+      <TopNav userName={session.user?.name} userImage={session.user?.image} />
+      <main className="mx-auto max-w-3xl px-6 py-12">
+        <h1 className="text-xl font-semibold tracking-tight">
+          연동할 저장소를 선택하세요
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          연동한 repo는 커밋이 쌓일 때마다 새 글이 자동으로 생성됩니다.
+        </p>
+        <div className="mt-8">
+          <RepoList repos={repos} />
+        </div>
+      </main>
+    </>
   );
 }
