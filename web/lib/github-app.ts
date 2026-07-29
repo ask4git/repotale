@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import { SignJWT, importPKCS8 } from "jose";
+import { SignJWT } from "jose";
+import { githubFetch } from "./github-fetch.ts";
 
 // Verifies a GitHub webhook payload against the `X-Hub-Signature-256` header.
 // GitHub signs the raw request body with HMAC-SHA256 using the webhook secret.
@@ -27,7 +28,10 @@ async function signAppJwt(): Promise<string> {
   }
 
   // env vars store the PEM with literal "\n" escapes since PEM is multi-line.
-  const key = await importPKCS8(privateKey.replace(/\\n/g, "\n"), "RS256");
+  // crypto.createPrivateKey auto-detects PKCS#1 ("BEGIN RSA PRIVATE KEY", the
+  // format GitHub Apps actually issue) vs PKCS#8, unlike jose's importPKCS8
+  // which only accepts PKCS#8.
+  const key = crypto.createPrivateKey(privateKey.replace(/\\n/g, "\n"));
   const now = Math.floor(Date.now() / 1000);
 
   return new SignJWT({})
@@ -45,23 +49,11 @@ export async function getInstallationAccessToken(
 ): Promise<string> {
   const jwt = await signAppJwt();
 
-  const res = await fetch(
+  const res = await githubFetch(
     `https://api.github.com/app/installations/${installationId}/access_tokens`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-    }
+    jwt,
+    { method: "POST" }
   );
-
-  if (!res.ok) {
-    throw new Error(
-      `failed to mint installation token: ${res.status} ${await res.text()}`
-    );
-  }
 
   const data = (await res.json()) as { token: string };
   return data.token;

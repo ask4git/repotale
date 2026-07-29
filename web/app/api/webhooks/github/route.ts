@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/github-app";
 
+type PushPayload = {
+  repository?: { full_name?: string };
+  commits?: unknown[];
+};
+
 export async function POST(req: NextRequest) {
   // must read the raw body before any JSON parsing, or the HMAC won't match
   const rawBody = await req.text();
@@ -12,7 +17,12 @@ export async function POST(req: NextRequest) {
   }
 
   const event = req.headers.get("x-github-event");
-  const payload = JSON.parse(rawBody);
+  let payload: PushPayload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
 
   if (event === "push") {
     const fullName = payload.repository?.full_name;

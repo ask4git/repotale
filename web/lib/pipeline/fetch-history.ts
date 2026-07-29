@@ -1,4 +1,5 @@
 // Fetches recent merged PRs (with diff + body/title) for a repo via the GitHub REST API.
+import { githubFetch } from "../github-fetch.ts";
 
 const DEFAULT_LIMIT = 20;
 // ponytail: GitHub's PR list isn't filterable by merged-only, so we over-fetch
@@ -24,20 +25,6 @@ type GithubPullRequestListItem = {
   merged_at: string | null;
 };
 
-async function githubFetch(url: string, accessToken: string, accept: string): Promise<Response> {
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: accept,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`GitHub API request to ${url} failed: ${res.status} ${res.statusText}`);
-  }
-  return res;
-}
-
 export async function fetchRecentMergedPRs(
   owner: string,
   repo: string,
@@ -47,17 +34,19 @@ export async function fetchRecentMergedPRs(
   const listRes = await githubFetch(
     `https://api.github.com/repos/${owner}/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=${LIST_PAGE_SIZE}`,
     accessToken,
-    "application/vnd.github+json"
+    { accept: "application/vnd.github+json" }
   );
   const list = (await listRes.json()) as GithubPullRequestListItem[];
   const merged = list.filter((pr) => pr.merged_at !== null).slice(0, limit);
 
-  return Promise.all(
-    merged.map(async (pr) => {
+  // allSettled, not all: one failed diff fetch (rate limit, transient 5xx)
+  // shouldn't discard every other diff already fetched successfully.
+  const results = await Promise.allSettled(
+    merged.map(async (pr): Promise<MergedPR> => {
       const diffRes = await githubFetch(
         `https://api.github.com/repos/${owner}/${repo}/pulls/${pr.number}`,
         accessToken,
-        "application/vnd.github.v3.diff"
+        { accept: "application/vnd.github.v3.diff" }
       );
       const diff = await diffRes.text();
       return {
@@ -71,4 +60,12 @@ export async function fetchRecentMergedPRs(
       };
     })
   );
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("[pipeline] PR diff fetch failed:", result.reason);
+    }
+  }
+  return results
+    .filter((r): r is PromiseFulfilledResult<MergedPR> => r.status === "fulfilled")
+    .map((r) => r.value);
 }

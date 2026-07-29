@@ -43,12 +43,14 @@ type GeneratedFields = {
   tags: string[];
 };
 
-function slugify(title: string): string {
+function slugify(title: string, prNumber: number): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return slug || "post";
+  // prNumber suffix guarantees uniqueness across PRs with the same/similar
+  // title (e.g. repeated dependency-bump PRs) within one analyzeRepo() batch.
+  return `${slug || "post"}-${prNumber}`;
 }
 
 export async function generatePost(pr: Cluster): Promise<Post> {
@@ -74,7 +76,7 @@ export async function generatePost(pr: Cluster): Promise<Post> {
   const fields = JSON.parse(block.text) as GeneratedFields;
 
   return {
-    slug: slugify(pr.title),
+    slug: slugify(pr.title, pr.number),
     title: fields.title,
     excerpt: fields.excerpt,
     tags: fields.tags,
