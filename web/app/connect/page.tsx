@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { TopNav } from "@/components/top-nav";
 import { RepoList } from "./repo-list";
 
@@ -13,10 +14,15 @@ async function fetchRepos(accessToken: string) {
 }
 
 export default async function ConnectPage() {
-  const session = await auth();
+  const requestHeaders = await headers();
+  const session = await auth.api.getSession({ headers: requestHeaders });
   if (!session) redirect("/login");
 
-  const repos = await fetchRepos(session.accessToken!);
+  const { accessToken } = await auth.api.getAccessToken({
+    body: { providerId: "github", userId: session.user.id },
+    headers: requestHeaders,
+  });
+  const repos = await fetchRepos(accessToken!);
 
   return (
     <>

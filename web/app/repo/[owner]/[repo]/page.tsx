@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ export default async function RepoSummaryPage({
 }: {
   params: Promise<{ owner: string; repo: string }>;
 }) {
-  const session = await auth();
+  const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
   const { owner, repo } = await params;
