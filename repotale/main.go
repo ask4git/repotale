@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"strings"
 )
 
@@ -28,6 +29,8 @@ func main() {
 		cmdConnect()
 	case "open":
 		cmdOpen()
+	case "--version", "-v", "version":
+		cmdVersion()
 	default:
 		usage()
 		os.Exit(1)
@@ -35,7 +38,16 @@ func main() {
 }
 
 func usage() {
-	fmt.Println("usage: repotale <login|connect <owner/repo>|open>")
+	fmt.Println("usage: repotale [<login|connect <owner/repo>|open|--version>]")
+}
+
+func cmdVersion() {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" || info.Main.Version == "(devel)" {
+		fmt.Println("repotale (dev build)")
+		return
+	}
+	fmt.Println("repotale", info.Main.Version)
 }
 
 func cmdLogin() {
