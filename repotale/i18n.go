@@ -101,6 +101,10 @@ Base folder: %s
   <repo>/posts/  analysis results, one folder per analyzed repo
   settings       your preferences (this file)
   config.json    login/session state for the remote (GitHub) flow
+
+To uninstall:
+  rm $(go env GOPATH)/bin/repotale   # the binary
+  rm -rf %s                          # settings/presets/analysis results (optional)
 `,
 }
 
@@ -159,6 +163,10 @@ var koMessages = map[string]string{
   <repo>/posts/  분석 결과, 분석한 repo마다 폴더 하나씩
   settings       환경설정 (이 파일)
   config.json    원격(GitHub) 연동용 로그인/세션 상태
+
+삭제하려면:
+  rm $(go env GOPATH)/bin/repotale   # 바이너리
+  rm -rf %s                          # 설정/프리셋/분석 결과 (선택)
 `,
 }
 
@@ -197,8 +205,15 @@ func initLanguage(reader *bufio.Reader) {
 		die(err)
 	}
 	fmt.Println()
-	fmt.Println(t("welcome", repotaleDir()))
+	fmt.Println(repotaleBanner)
+	fmt.Println(t("welcome", repotaleDir(), repotaleDir()))
 }
+
+const repotaleBanner = "                   _        _     \n" +
+	" _ _ ___ _ __  ___| |_ __ _| |___ \n" +
+	"| '_/ -_) '_ \\/ _ \\  _/ _` | / -_)\n" +
+	"|_| \\___| .__/\\___/\\__\\__,_|_\\___|\n" +
+	"        |_|                       "
 
 func promptLanguage(reader *bufio.Reader) lang {
 	fmt.Print(t("select_language"))
