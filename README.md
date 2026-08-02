@@ -22,13 +22,13 @@ repotale
 분석할 repo 경로 [/Users/you/my-project]:
 model: Claude Code (claude CLI, using your local login)
 analyzing 10 commit(s) in /Users/you/my-project...
-  aeda217 GitHub 하나뿐이던 로그인 버튼에 Google·GitLab·Apple·Passkey를 붙였습니다
+  aeda217 GitHub 하나뿐이던 로그인 버튼에 Google·GitLab·Apple·Passkey를 붙였습니다  (claude session 6c33497a-...)
   ...
-saved 10 post(s) to ~/.repotale/my-project/posts
-opening http://localhost:3000/local/my-project
+10 new, 10 total post(s) in ~/.repotale/my-project/posts
+serving at http://127.0.0.1:4321/ - press Ctrl+C to stop
 ```
 
-로컬 `claude` CLI(로그인된 상태)만 있으면 되고, API 키도 로그인 화면도 필요 없다. `web/`을 `make dev`로 띄워두면 저장된 글을 그 자리에서 볼 수 있다.
+로컬 `claude` CLI(로그인된 상태)만 있으면 끝 — API 키도, Node.js도, 로그인 화면도 필요 없다. `repotale` 바이너리 하나가 분석부터 웹 서버까지 다 함. 다시 실행해도 이미 분석한 커밋은 건너뛴다.
 
 ### 실제로 이 repo를 분석하면 나오는 글 (진짜 결과, 손질 안 함)
 
@@ -51,9 +51,9 @@ commit 메시지나 diff엔 저런 문장이 없다 — 그걸 읽고 재구성�
 ## 구조
 
 ```
-repotale/       Go CLI — repotale 실행 시 로컬 git log 분석 (기본 동작)
-                repotale login / connect / open — GitHub 원격 연동용 보조 명령
-web/            Next.js 앱 — 로컬 분석 결과 뷰 + (진행 중) 로그인/원격 repo 연동
+repotale/       Go CLI — repotale 실행 시 로컬 git log 분석 + 내장 웹서버로 결과 표시 (기본 동작)
+                repotale login / connect / open / update — GitHub 원격 연동, 자가 업데이트 보조 명령
+web/            Next.js 앱 — (진행 중) 로그인/원격 repo 연동용, 로컬 분석과는 무관
 docs/           기획·설계 문서, 미해결 이슈
 experiments/    프롬프트 실험 기록
 environments/   환경별 .env 예시 (local/devel/staging/production)
@@ -65,7 +65,9 @@ docker-compose.yml  web + Postgres 실행 (원격 연동 모드용)
 | 기능 | 상태 |
 |---|---|
 | 로컬 repo 분석 (`repotale` 실행 → 커밋 → 블로그) | 됨 |
-| 로컬 웹 뷰 (`/local/[repoId]`, 로그인 불필요) | 됨 |
+| 내장 웹서버로 결과 보기 (Node/DB/로그인 불필요, `repotale` 바이너리 하나로) | 됨 |
+| 이미 분석한 커밋 재분석 스킵 | 됨 |
+| `.repotale/prompt.md`로 분석 프롬프트 커스텀 | 됨 |
 | GitHub/Google/GitLab/Apple 로그인 (원격 연동용) | 됨 |
 | GitHub repo 연동 화면 (`/connect`) | 됨 |
 | push 시 자동 재분석 (GitHub 웹훅) | 웹훅 수신은 되나 분석 파이프라인 미연결 |
@@ -81,11 +83,10 @@ docker-compose.yml  web + Postgres 실행 (원격 연동 모드용)
 
 ```bash
 go install github.com/ask4git/repotale/repotale@latest  # 또는: make cli-build
-make dev            # 웹 화면 (별도 터미널)
 repotale            # 분석하고 싶은 repo에서
 ```
 
-결과는 `~/.repotale/<repo이름>/posts/*.json`에 저장되고, `http://localhost:3000/local/<repo이름>`에서 볼 수 있다.
+결과는 `~/.repotale/<repo이름>/posts/*.json`에 저장되고, 분석이 끝나면 `repotale`이 알아서 `http://127.0.0.1:4321`에 웹 서버를 띄워 보여준다. 분석 프롬프트를 바꾸고 싶으면 repo에 `.repotale/prompt.md`를 만들면 기본 프롬프트 대신 그 내용을 쓴다.
 
 ### 원격(GitHub) 연동 — 진행 중
 

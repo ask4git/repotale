@@ -64,6 +64,8 @@ func cmdAnalyze() {
 	}
 	fmt.Println("model: Claude Code (claude CLI, using your local login)")
 
+	systemPrompt := loadSystemPrompt(repoPath)
+
 	shas, err := recentCommits(repoPath, 10)
 	if err != nil {
 		die(fmt.Errorf("reading git log: %w", err))
@@ -82,7 +84,13 @@ func cmdAnalyze() {
 	fmt.Printf("analyzing %d commit(s) in %s...\n", len(shas), repoPath)
 	saved := 0
 	for _, sha := range shas {
-		post, err := analyzeCommit(repoPath, sha)
+		postPath := filepath.Join(outDir, sha[:7]+".json")
+		if _, err := os.Stat(postPath); err == nil {
+			fmt.Printf("  %s (already analyzed, skipping)\n", sha[:7])
+			continue
+		}
+
+		post, sessionID, err := analyzeCommit(repoPath, sha, systemPrompt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  skip %s: %v\n", sha[:7], err)
 			continue
@@ -91,22 +99,26 @@ func cmdAnalyze() {
 		if err != nil {
 			die(err)
 		}
-		if err := os.WriteFile(filepath.Join(outDir, post.Slug+".json"), data, 0644); err != nil {
+		if err := os.WriteFile(postPath, data, 0644); err != nil {
 			die(err)
 		}
-		fmt.Printf("  %s %s\n", sha[:7], post.Title)
+		fmt.Printf("  %s %s  (claude session %s)\n", sha[:7], post.Title, sessionID)
 		saved++
 	}
 
-	if saved == 0 {
-		fmt.Println("\nno posts generated")
+	posts, err := loadLocalPosts(outDir)
+	if err != nil {
+		die(err)
+	}
+	if len(posts) == 0 {
+		fmt.Println("\nno posts to show")
 		return
 	}
 
-	url := "http://localhost:3000/local/" + repoID
-	fmt.Printf("\nsaved %d post(s) to %s\n", saved, outDir)
-	fmt.Println("opening", url, "(run `make dev` first if the web app isn't running yet)")
-	_ = openBrowser(url)
+	fmt.Printf("\n%d new, %d total post(s) in %s\n", saved, len(posts), outDir)
+	if err := serveLocal(repoID, posts); err != nil {
+		die(err)
+	}
 }
 
 func promptRepoPath() string {
@@ -167,18 +179,29 @@ func repoIdentifier(repoPath string) string {
 	return id
 }
 
-func analyzeCommit(repoPath, sha string) (localPost, error) {
+// loadSystemPrompt lets a repo fully override the analysis prompt via
+// .repotale/prompt.md (mirrors CLAUDE.md: a project-checked-in file that
+// customizes agent behavior). Falls back to the built-in default.
+func loadSystemPrompt(repoPath string) string {
+	custom, err := os.ReadFile(filepath.Join(repoPath, ".repotale", "prompt.md"))
+	if err != nil {
+		return analyzeSystemPrompt
+	}
+	return string(custom)
+}
+
+func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, string, error) {
 	message, err := commitMessage(repoPath, sha)
 	if err != nil {
-		return localPost{}, fmt.Errorf("reading commit message: %w", err)
+		return localPost{}, "", fmt.Errorf("reading commit message: %w", err)
 	}
 	diff, err := commitDiff(repoPath, sha)
 	if err != nil {
-		return localPost{}, fmt.Errorf("reading commit diff: %w", err)
+		return localPost{}, "", fmt.Errorf("reading commit diff: %w", err)
 	}
 	date, err := commitDate(repoPath, sha)
 	if err != nil {
-		return localPost{}, fmt.Errorf("reading commit date: %w", err)
+		return localPost{}, "", fmt.Errorf("reading commit date: %w", err)
 	}
 
 	// keep the diff bounded - an oversized commit shouldn't blow the prompt budget
@@ -187,10 +210,10 @@ func analyzeCommit(repoPath, sha string) (localPost, error) {
 		diff = diff[:maxDiffLen] + "\n...(truncated)"
 	}
 
-	prompt := analyzeSystemPrompt + "\n\n커밋 메시지:\n" + message + "\n\ndiff:\n" + diff
-	fields, err := runClaude(prompt)
+	prompt := systemPrompt + "\n\n커밋 메시지:\n" + message + "\n\ndiff:\n" + diff
+	fields, sessionID, err := runClaude(prompt)
 	if err != nil {
-		return localPost{}, err
+		return localPost{}, "", err
 	}
 
 	publishedAt := date
@@ -205,7 +228,7 @@ func analyzeCommit(repoPath, sha string) (localPost, error) {
 		Tags:        fields.Tags,
 		CommitSHA:   sha,
 		PublishedAt: publishedAt,
-	}, nil
+	}, sessionID, nil
 }
 
 func commitMessage(repoPath, sha string) (string, error) {
@@ -226,7 +249,7 @@ func commitDiff(repoPath, sha string) (string, error) {
 // runClaude shells out to the locally-authenticated Claude Code CLI in
 // non-interactive mode. --allowedTools "" keeps it a pure text-in/JSON-out
 // call (no filesystem exploration), which is both cheaper and deterministic.
-func runClaude(prompt string) (generatedFields, error) {
+func runClaude(prompt string) (generatedFields, string, error) {
 	cmd := exec.Command("claude", "-p", prompt,
 		"--output-format", "json",
 		"--json-schema", analyzeJSONSchema,
@@ -234,18 +257,19 @@ func runClaude(prompt string) (generatedFields, error) {
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		return generatedFields{}, fmt.Errorf("claude CLI: %w", err)
+		return generatedFields{}, "", fmt.Errorf("claude CLI: %w", err)
 	}
 
 	var wrapper struct {
 		IsError          bool            `json:"is_error"`
+		SessionID        string          `json:"session_id"`
 		StructuredOutput generatedFields `json:"structured_output"`
 	}
 	if err := json.Unmarshal(out, &wrapper); err != nil {
-		return generatedFields{}, fmt.Errorf("parsing claude output: %w", err)
+		return generatedFields{}, "", fmt.Errorf("parsing claude output: %w", err)
 	}
 	if wrapper.IsError {
-		return generatedFields{}, fmt.Errorf("claude returned an error")
+		return generatedFields{}, wrapper.SessionID, fmt.Errorf("claude returned an error")
 	}
-	return wrapper.StructuredOutput, nil
+	return wrapper.StructuredOutput, wrapper.SessionID, nil
 }
