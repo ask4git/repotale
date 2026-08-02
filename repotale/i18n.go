@@ -47,7 +47,7 @@ claude CLI가 로그인된 상태로 PATH에 있어야 함)
   -v, --version      버전 표시`
 
 var enMessages = map[string]string{
-	"select_language":   "Select language / 언어를 선택하세요:\n  [1] English\n  [2] 한국어\nChoice / 선택 [1]: ",
+	"select_language":   "Select language / 언어를 선택하세요:\n  [1] English\n  [2] 한국어\nChoice / 선택 [2]: ",
 	"language_saved":    "Language set to %s",
 	"error_prefix":      "error:",
 	"usage":             usageEN,
@@ -109,7 +109,7 @@ To uninstall:
 }
 
 var koMessages = map[string]string{
-	"select_language":   "언어를 선택하세요 / Select language:\n  [1] English\n  [2] 한국어\n선택 / Choice [1]: ",
+	"select_language":   "언어를 선택하세요 / Select language:\n  [1] English\n  [2] 한국어\n선택 / Choice [2]: ",
 	"language_saved":    "언어가 %s로 설정되었습니다",
 	"error_prefix":      "에러:",
 	"usage":             usageKO,
@@ -218,10 +218,10 @@ const repotaleBanner = "                   _        _     \n" +
 func promptLanguage(reader *bufio.Reader) lang {
 	fmt.Print(t("select_language"))
 	line, _ := reader.ReadString('\n')
-	if strings.TrimSpace(line) == "2" {
-		return langKO
+	if strings.TrimSpace(line) == "1" {
+		return langEN
 	}
-	return langEN
+	return langKO
 }
 
 // cmdLanguage lets the user change the saved language at any time

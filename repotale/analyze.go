@@ -20,7 +20,7 @@ var presetsFS embed.FS
 // here + presets/xsoft.md, presets/xhard.md when that's actually needed.
 var presetNames = []string{"soft", "medium", "hard"}
 
-const defaultPreset = "soft"
+const defaultPreset = "medium"
 
 type localPost struct {
 	Slug        string   `json:"slug"`
@@ -53,7 +53,7 @@ func cmdAnalyze(stdin *bufio.Reader) {
 		die(fmt.Errorf("%s", t("claude_not_found")))
 	}
 	fmt.Println(t("analyze_model_line"))
-	if !confirm(stdin, t("analyze_confirm_claude")) {
+	if !confirm(stdin, t("analyze_confirm_claude"), true) {
 		fmt.Println(t("cancelled"))
 		return
 	}
@@ -83,7 +83,7 @@ func cmdAnalyze(stdin *bufio.Reader) {
 		fmt.Println(t("no_new_commits"))
 	} else {
 		fmt.Println(t("token_estimate", len(newShas), estTokens))
-		if !confirm(stdin, t("confirm_proceed")) {
+		if !confirm(stdin, t("confirm_proceed"), true) {
 			fmt.Println(t("cancelled"))
 			return
 		}
@@ -136,10 +136,17 @@ func cmdAnalyze(stdin *bufio.Reader) {
 	}
 }
 
-func confirm(reader *bufio.Reader, question string) bool {
-	fmt.Printf("%s (y/n) [n]: ", question)
+func confirm(reader *bufio.Reader, question string, defaultYes bool) bool {
+	suffix := "[y/N]"
+	if defaultYes {
+		suffix = "[Y/n]"
+	}
+	fmt.Printf("%s (%s): ", question, suffix)
 	line, _ := reader.ReadString('\n')
 	answer := strings.ToLower(strings.TrimSpace(line))
+	if answer == "" {
+		return defaultYes
+	}
 	return answer == "y" || answer == "yes"
 }
 
