@@ -95,6 +95,22 @@ func TestEnsurePresetsOnDiskDoesNotClobberEdits(t *testing.T) {
 	}
 }
 
+func TestNormalizeGitHubURL(t *testing.T) {
+	cases := map[string]string{
+		"git@github.com:ask4git/repotale.git":     "https://github.com/ask4git/repotale",
+		"git@github.com:ask4git/repotale":         "https://github.com/ask4git/repotale",
+		"https://github.com/ask4git/repotale.git": "https://github.com/ask4git/repotale",
+		"https://github.com/ask4git/repotale":     "https://github.com/ask4git/repotale",
+		"git@gitlab.com:someone/somerepo.git":     "",
+		"":                                        "",
+	}
+	for input, want := range cases {
+		if got := normalizeGitHubURL(input); got != want {
+			t.Errorf("normalizeGitHubURL(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestRepoIdentifier(t *testing.T) {
 	cases := map[string]string{
 		"/Users/me/My Project":  "my-project",

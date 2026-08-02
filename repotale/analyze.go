@@ -30,6 +30,7 @@ type localPost struct {
 	CommitSHA   string   `json:"commitSha"`
 	PublishedAt string   `json:"publishedAt"`
 	SessionID   string   `json:"sessionId,omitempty"`
+	RepoURL     string   `json:"repoUrl,omitempty"` // e.g. https://github.com/owner/repo - empty if origin isn't GitHub
 }
 
 type generatedFields struct {
@@ -94,6 +95,8 @@ func cmdAnalyze(stdin *bufio.Reader) {
 		}
 	}
 
+	repoURL := repoRemoteURL(repoPath)
+
 	fmt.Println(t("analyzing_line", len(shas), repoPath))
 	saved := 0
 	for _, sha := range shas {
@@ -108,6 +111,7 @@ func cmdAnalyze(stdin *bufio.Reader) {
 			fmt.Fprintln(os.Stderr, t("skip_error", sha[:7], err))
 			continue
 		}
+		post.RepoURL = repoURL
 		data, err := json.MarshalIndent(post, "", "  ")
 		if err != nil {
 			die(err)
@@ -185,6 +189,27 @@ func promptRepoPath(reader *bufio.Reader) string {
 
 func isGitRepo(path string) bool {
 	return exec.Command("git", "-C", path, "rev-parse", "--is-inside-work-tree").Run() == nil
+}
+
+// repoRemoteURL returns the repo's GitHub URL (for linking commits from the
+// web view), or "" if there's no origin remote or it isn't GitHub.
+func repoRemoteURL(repoPath string) string {
+	out, err := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin").Output()
+	if err != nil {
+		return ""
+	}
+	return normalizeGitHubURL(strings.TrimSpace(string(out)))
+}
+
+func normalizeGitHubURL(remote string) string {
+	remote = strings.TrimSuffix(remote, ".git")
+	if strings.HasPrefix(remote, "git@github.com:") {
+		return "https://github.com/" + strings.TrimPrefix(remote, "git@github.com:")
+	}
+	if strings.HasPrefix(remote, "https://github.com/") || strings.HasPrefix(remote, "http://github.com/") {
+		return remote
+	}
+	return ""
 }
 
 func recentCommits(repoPath string, n int) ([]string, error) {

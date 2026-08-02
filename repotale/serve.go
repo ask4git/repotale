@@ -16,7 +16,27 @@ import (
 //go:embed templates/local.html.tmpl
 var templatesFS embed.FS
 
-var localTmpl = template.Must(template.ParseFS(templatesFS, "templates/local.html.tmpl"))
+// tagTier buckets a generated tag into a rough importance level so the web
+// view can give it more or less visual weight. Anything not listed falls
+// into the middle tier - not important enough to alarm on, not routine
+// enough to mute.
+var tagTiers = map[string]string{
+	"breaking": "tag-high", "security": "tag-high", "fix": "tag-high", "bugfix": "tag-high",
+	"refactor": "tag-low", "chore": "tag-low", "docs": "tag-low", "style": "tag-low", "deps": "tag-low", "ci": "tag-low", "test": "tag-low",
+}
+
+func tagClass(tag string) string {
+	if c, ok := tagTiers[strings.ToLower(tag)]; ok {
+		return c
+	}
+	return "tag-mid"
+}
+
+var localTmpl = template.Must(
+	template.New("local.html.tmpl").
+		Funcs(template.FuncMap{"tagClass": tagClass}).
+		ParseFS(templatesFS, "templates/local.html.tmpl"),
+)
 
 func loadLocalPosts(postsDir string) ([]localPost, error) {
 	entries, err := os.ReadDir(postsDir)

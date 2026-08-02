@@ -63,3 +63,35 @@ func TestLocalTmplOmitsSessionIDWhenEmpty(t *testing.T) {
 		t.Errorf("expected no session id text for a post with an empty SessionID")
 	}
 }
+
+func TestLocalTmplLinksCommitWhenRepoURLPresent(t *testing.T) {
+	out := renderLocalPage(t, []localPost{
+		{Slug: "abc1234", Title: "t", CommitSHA: "abc1234567890", PublishedAt: "2026-08-02", RepoURL: "https://github.com/ask4git/repotale"},
+	})
+	want := `<a href="https://github.com/ask4git/repotale/commit/abc1234567890"`
+	if !strings.Contains(out, want) {
+		t.Errorf("expected commit link %q, got:\n%s", want, out)
+	}
+}
+
+func TestLocalTmplNoLinkWithoutRepoURL(t *testing.T) {
+	out := renderLocalPage(t, []localPost{
+		{Slug: "abc1234", Title: "t", CommitSHA: "abc1234567890", PublishedAt: "2026-08-02"},
+	})
+	if strings.Contains(out, "<a href=") {
+		t.Errorf("expected no commit link when RepoURL is empty, got:\n%s", out)
+	}
+}
+
+func TestLocalTmplTagTiers(t *testing.T) {
+	out := renderLocalPage(t, []localPost{
+		{Slug: "abc1234", Title: "t", CommitSHA: "abc1234567890", PublishedAt: "2026-08-02",
+			Tags: []string{"fix", "feature", "chore"}},
+	})
+	for tag, class := range map[string]string{"fix": "tag-high", "feature": "tag-mid", "chore": "tag-low"} {
+		want := `class="tag ` + class + `">` + tag
+		if !strings.Contains(out, want) {
+			t.Errorf("expected tag %q to render with class %q, got:\n%s", tag, class, out)
+		}
+	}
+}
