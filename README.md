@@ -14,14 +14,14 @@
 repo 안에서 실행하면, 최근 커밋을 읽고 로컬 웹 화면에 블로그로 띄운다.
 
 ```bash
-go install github.com/ask4git/repotale/repotale@v0.1.0
-export PATH="$PATH:$(go env GOPATH)/bin"  # 이미 PATH에 있으면 스킵됨, `repotale`이 바로 실행되면 필요 없음
-repotale
+GOPROXY=direct GOSUMDB=off go install github.com/ask4git/repotale/repotale@v0.1.0 && export PATH="$PATH:$(go env GOPATH)/bin" && repotale
 ```
 
-버전 태그(`@v0.1.0`) 대신 `@latest` 쓰면 방금 push된 커밋을 Go 모듈 프록시가 아직 못 봐서 옛날 버전이 깔릴 수 있음 - 태그 박힌 버전이 제일 확실함. 이후 업데이트는 `repotale update`.
+`go install` 자체는 컴파일만 하는 Go 툴체인 명령이라 그 과정 중엔 아무것도 출력 못 함(npm의 postinstall 같은 훅이 Go엔 없음) - 그래서 설치, PATH 설정, 첫 실행을 한 줄로 이어붙여서 설치하자마자 바로 아래 화면이 뜨게 했다.
 
-`command not found: repotale`이 뜨면 Go의 설치 경로(`~/go/bin`)가 PATH에 없는 것 - 위 `export` 한 줄이면 그 세션에서 바로 해결되고, 매번 새 터미널에서도 되게 하려면:
+`GOPROXY=direct GOSUMDB=off`는 Go 모듈 프록시/체크섬DB가 새 버전을 아직 못 봐서 옛날 버전이 깔리거나 설치 자체가 실패하는 걸 막기 위함 - 태그 박힌 버전이라도 가끔 겪는 문제라 방어적으로 넣어둠. 이후 업데이트는 `repotale update`.
+
+매번 새 터미널에서도 PATH가 되게 하려면 (한 번만):
 
 ```bash
 echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc

@@ -94,7 +94,7 @@ var enMessages = map[string]string{
 	"web_commit_label":  "commit",
 	"web_session_label": "claude session",
 
-	"welcome": `repotale is installed and ready.
+	"welcome": `Installed successfully!
 
 Base folder: %s
   presets/       editable tone presets (soft/medium/hard)
@@ -156,7 +156,7 @@ var koMessages = map[string]string{
 	"web_commit_label":  "commit",
 	"web_session_label": "claude 세션",
 
-	"welcome": `repotale 설치 확인 완료, 바로 쓸 수 있습니다.
+	"welcome": `설치가 성공적으로 완료되었습니다!
 
 기본 폴더: %s
   presets/       편집 가능한 톤 프리셋 (soft/medium/hard)
