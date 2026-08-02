@@ -65,6 +65,9 @@ func cmdUpdate() {
 
 	fmt.Println("updating via go install", modulePath+"@latest ...")
 	cmd := exec.Command("go", "install", modulePath+"@latest")
+	// GOPROXY=direct: proxy.golang.org caches @latest for a while, which would
+	// otherwise make `update` reinstall a stale version right after a fresh push.
+	cmd.Env = append(os.Environ(), "GOPROXY=direct")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
