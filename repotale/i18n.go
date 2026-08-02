@@ -93,6 +93,15 @@ var enMessages = map[string]string{
 	"web_empty":         "No analysis yet.",
 	"web_commit_label":  "commit",
 	"web_session_label": "claude session",
+
+	"welcome": `repotale is installed and ready.
+
+Base folder: %s
+  presets/       editable tone presets (soft/medium/hard)
+  <repo>/posts/  analysis results, one folder per analyzed repo
+  settings       your preferences (this file)
+  config.json    login/session state for the remote (GitHub) flow
+`,
 }
 
 var koMessages = map[string]string{
@@ -142,6 +151,15 @@ var koMessages = map[string]string{
 	"web_empty":         "아직 분석 결과가 없습니다.",
 	"web_commit_label":  "commit",
 	"web_session_label": "claude 세션",
+
+	"welcome": `repotale 설치 확인 완료, 바로 쓸 수 있습니다.
+
+기본 폴더: %s
+  presets/       편집 가능한 톤 프리셋 (soft/medium/hard)
+  <repo>/posts/  분석 결과, 분석한 repo마다 폴더 하나씩
+  settings       환경설정 (이 파일)
+  config.json    원격(GitHub) 연동용 로그인/세션 상태
+`,
 }
 
 func t(key string, args ...any) string {
@@ -161,7 +179,9 @@ func t(key string, args ...any) string {
 
 // initLanguage loads the saved language setting from ~/.repotale/settings,
 // prompting to choose one (bilingual, since the language isn't known yet)
-// the first time there's no saved choice.
+// the first time there's no saved choice - which also means this is the
+// first-ever run, so it's the right moment to confirm the install worked
+// and show the on-disk layout.
 func initLanguage(reader *bufio.Reader) {
 	settings, err := loadSettings()
 	if err == nil {
@@ -172,6 +192,12 @@ func initLanguage(reader *bufio.Reader) {
 	}
 	currentLang = promptLanguage(reader)
 	_ = setSetting("language", string(currentLang))
+
+	if err := ensurePresetsOnDisk(); err != nil {
+		die(err)
+	}
+	fmt.Println()
+	fmt.Println(t("welcome", repotaleDir()))
 }
 
 func promptLanguage(reader *bufio.Reader) lang {

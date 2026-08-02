@@ -15,7 +15,14 @@ repo 안에서 실행하면, 최근 커밋을 읽고 로컬 웹 화면에 블로
 
 ```bash
 go install github.com/ask4git/repotale/repotale@latest
+export PATH="$PATH:$(go env GOPATH)/bin"  # 이미 PATH에 있으면 스킵됨, `repotale`이 바로 실행되면 필요 없음
 repotale
+```
+
+`command not found: repotale`이 뜨면 Go의 설치 경로(`~/go/bin`)가 PATH에 없는 것 - 위 `export` 한 줄이면 그 세션에서 바로 해결되고, 매번 새 터미널에서도 되게 하려면:
+
+```bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
 ```
 
 ```
