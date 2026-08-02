@@ -40,6 +40,7 @@ type localPost struct {
 	Tags        []string `json:"tags"`
 	CommitSHA   string   `json:"commitSha"`
 	PublishedAt string   `json:"publishedAt"`
+	SessionID   string   `json:"sessionId,omitempty"`
 }
 
 type generatedFields struct {
@@ -90,7 +91,7 @@ func cmdAnalyze() {
 			continue
 		}
 
-		post, sessionID, err := analyzeCommit(repoPath, sha, systemPrompt)
+		post, err := analyzeCommit(repoPath, sha, systemPrompt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  skip %s: %v\n", sha[:7], err)
 			continue
@@ -102,7 +103,7 @@ func cmdAnalyze() {
 		if err := os.WriteFile(postPath, data, 0644); err != nil {
 			die(err)
 		}
-		fmt.Printf("  %s %s  (claude session %s)\n", sha[:7], post.Title, sessionID)
+		fmt.Printf("  %s %s  (claude session %s)\n", sha[:7], post.Title, post.SessionID)
 		saved++
 	}
 
@@ -190,18 +191,18 @@ func loadSystemPrompt(repoPath string) string {
 	return string(custom)
 }
 
-func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, string, error) {
+func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, error) {
 	message, err := commitMessage(repoPath, sha)
 	if err != nil {
-		return localPost{}, "", fmt.Errorf("reading commit message: %w", err)
+		return localPost{}, fmt.Errorf("reading commit message: %w", err)
 	}
 	diff, err := commitDiff(repoPath, sha)
 	if err != nil {
-		return localPost{}, "", fmt.Errorf("reading commit diff: %w", err)
+		return localPost{}, fmt.Errorf("reading commit diff: %w", err)
 	}
 	date, err := commitDate(repoPath, sha)
 	if err != nil {
-		return localPost{}, "", fmt.Errorf("reading commit date: %w", err)
+		return localPost{}, fmt.Errorf("reading commit date: %w", err)
 	}
 
 	// keep the diff bounded - an oversized commit shouldn't blow the prompt budget
@@ -213,7 +214,7 @@ func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, string, error
 	prompt := systemPrompt + "\n\n커밋 메시지:\n" + message + "\n\ndiff:\n" + diff
 	fields, sessionID, err := runClaude(prompt)
 	if err != nil {
-		return localPost{}, "", err
+		return localPost{}, err
 	}
 
 	publishedAt := date
@@ -228,7 +229,8 @@ func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, string, error
 		Tags:        fields.Tags,
 		CommitSHA:   sha,
 		PublishedAt: publishedAt,
-	}, sessionID, nil
+		SessionID:   sessionID,
+	}, nil
 }
 
 func commitMessage(repoPath, sha string) (string, error) {
