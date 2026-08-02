@@ -12,19 +12,27 @@ import (
 )
 
 func die(err error) {
-	fmt.Fprintln(os.Stderr, "error:", err)
+	fmt.Fprintln(os.Stderr, t("error_prefix"), err)
 	os.Exit(1)
 }
 
 func main() {
+	stdin := bufio.NewReader(os.Stdin)
+
+	if len(os.Args) >= 2 && (os.Args[1] == "--language" || os.Args[1] == "language") {
+		cmdLanguage(stdin)
+		return
+	}
+	initLanguage(stdin)
+
 	if len(os.Args) < 2 {
-		cmdAnalyze()
+		cmdAnalyze(stdin)
 		return
 	}
 
 	switch os.Args[1] {
 	case "login":
-		cmdLogin()
+		cmdLogin(stdin)
 	case "connect":
 		cmdConnect()
 	case "open":
@@ -42,28 +50,17 @@ func main() {
 }
 
 func usage() {
-	fmt.Println(`usage: repotale [command]
-
-with no command: analyze the local repo's recent commits (prompts for
-repo path and requires the claude CLI, logged in, in PATH)
-
-commands:
-  login              log in with a GitHub personal access token
-  connect <owner/repo>  connect a GitHub repo
-  open               open the connected repo's web dashboard
-  update             go install the latest version of repotale
-  -h, --help         show this help
-  -v, --version      show version`)
+	fmt.Println(t("usage"))
 }
 
 const modulePath = "github.com/ask4git/repotale/repotale"
 
 func cmdUpdate() {
 	if _, err := exec.LookPath("go"); err != nil {
-		die(fmt.Errorf("go not found in PATH - needed to update (https://go.dev/dl)"))
+		die(fmt.Errorf("%s", t("update_go_missing")))
 	}
 
-	fmt.Println("updating via go install", modulePath+"@latest ...")
+	fmt.Println(t("update_start", modulePath))
 	cmd := exec.Command("go", "install", modulePath+"@latest")
 	// GOPROXY=direct: proxy.golang.org caches @latest for a while, which would
 	// otherwise make `update` reinstall a stale version right after a fresh push.
@@ -71,36 +68,35 @@ func cmdUpdate() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		die(fmt.Errorf("update failed: %w", err))
+		die(fmt.Errorf(t("update_failed"), err))
 	}
-	fmt.Println("updated")
+	fmt.Println(t("update_done"))
 }
 
 func cmdVersion() {
 	info, ok := debug.ReadBuildInfo()
 	if !ok || info.Main.Version == "" || info.Main.Version == "(devel)" {
-		fmt.Println("repotale (dev build)")
+		fmt.Println(t("version_dev"))
 		return
 	}
 	fmt.Println("repotale", info.Main.Version)
 }
 
-func cmdLogin() {
+func cmdLogin(reader *bufio.Reader) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		fmt.Print("Enter your GitHub personal access token: ")
-		reader := bufio.NewReader(os.Stdin)
+		fmt.Print(t("login_prompt"))
 		line, err := reader.ReadString('\n')
 		// io.EOF with data already read just means no trailing newline
 		// (e.g. `echo -n "$TOKEN" | repotale login`) — the token is still valid.
 		if err != nil && err != io.EOF {
-			die(fmt.Errorf("reading token: %w", err))
+			die(fmt.Errorf(t("login_reading_token"), err))
 		}
 		token = strings.TrimSpace(line)
 	}
 
 	if token == "" {
-		die(fmt.Errorf("no token provided"))
+		die(fmt.Errorf("%s", t("login_no_token")))
 	}
 
 	if err := validateToken(token); err != nil {
@@ -117,19 +113,19 @@ func cmdLogin() {
 		die(err)
 	}
 
-	fmt.Println("logged in successfully")
+	fmt.Println(t("login_success"))
 }
 
 func cmdConnect() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: repotale connect <owner/repo>")
+		fmt.Fprintln(os.Stderr, t("connect_usage"))
 		os.Exit(1)
 	}
 	ownerRepo := os.Args[2]
 
 	parts := strings.Split(ownerRepo, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		die(fmt.Errorf("repo must be in owner/repo form"))
+		die(fmt.Errorf("%s", t("connect_bad_format")))
 	}
 
 	cfg, err := loadConfig()
@@ -137,7 +133,7 @@ func cmdConnect() {
 		die(err)
 	}
 	if cfg.Token == "" {
-		die(fmt.Errorf("not logged in, run `repotale login` first"))
+		die(fmt.Errorf("%s", t("connect_not_logged_in")))
 	}
 
 	if err := validateRepo(cfg.Token, ownerRepo); err != nil {
@@ -149,7 +145,7 @@ func cmdConnect() {
 		die(err)
 	}
 
-	fmt.Println("connected to", ownerRepo)
+	fmt.Println(t("connect_success", ownerRepo))
 }
 
 func cmdOpen() {
@@ -158,7 +154,7 @@ func cmdOpen() {
 		die(err)
 	}
 	if cfg.Repo == "" {
-		die(fmt.Errorf("no repo connected, run `repotale connect <owner/repo>` first"))
+		die(fmt.Errorf("%s", t("open_no_repo")))
 	}
 
 	url := "http://localhost:3000/repo/" + cfg.Repo

@@ -56,9 +56,22 @@ func serveLocal(repoID string, posts []localPost) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		data := struct {
-			RepoID string
-			Posts  []localPost
-		}{repoID, posts}
+			Lang         string
+			RepoID       string
+			Posts        []localPost
+			Heading      string
+			Empty        string
+			CommitLabel  string
+			SessionLabel string
+		}{
+			Lang:         string(currentLang),
+			RepoID:       repoID,
+			Posts:        posts,
+			Heading:      t("web_heading"),
+			Empty:        t("web_empty"),
+			CommitLabel:  t("web_commit_label"),
+			SessionLabel: t("web_session_label"),
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := localTmpl.Execute(w, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -75,7 +88,7 @@ func serveLocal(repoID string, posts []localPost) error {
 	}
 
 	url := "http://" + ln.Addr().String() + "/"
-	fmt.Println("serving at", url, "- press Ctrl+C to stop")
+	fmt.Println(t("serving_line", url))
 	_ = openBrowser(url)
 
 	return http.Serve(ln, mux)

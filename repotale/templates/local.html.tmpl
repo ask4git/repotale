@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -25,7 +25,9 @@
 </head>
 <body>
   <p class="repo">{{.RepoID}}</p>
-  <h1>이 repo에서 무슨 일이 있었나</h1>
+  <h1>{{.Heading}}</h1>
+  {{$commitLabel := .CommitLabel}}
+  {{$sessionLabel := .SessionLabel}}
   {{if .Posts}}
     {{range .Posts}}
     <div class="post">
@@ -35,11 +37,11 @@
       </div>
       <p class="title">{{.Title}}</p>
       <p class="excerpt">{{.Excerpt}}</p>
-      <p class="sha">commit {{slice .CommitSHA 0 7}}{{if .SessionID}} · claude session {{.SessionID}}{{end}}</p>
+      <p class="sha">{{$commitLabel}} {{slice .CommitSHA 0 7}}{{if .SessionID}} · {{$sessionLabel}} {{.SessionID}}{{end}}</p>
     </div>
     {{end}}
   {{else}}
-    <p class="empty">아직 분석 결과가 없습니다.</p>
+    <p class="empty">{{.Empty}}</p>
   {{end}}
 </body>
 </html>

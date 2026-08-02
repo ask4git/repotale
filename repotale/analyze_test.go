@@ -1,18 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestLoadSystemPrompt(t *testing.T) {
+func TestLoadSystemPrompt_RepoOverrideWinsAndSkipsPrompt(t *testing.T) {
 	repoPath := t.TempDir()
-
-	if got := loadSystemPrompt(repoPath); got != analyzeSystemPrompt {
-		t.Errorf("with no .repotale/prompt.md, got a different prompt than the default")
-	}
-
 	if err := os.MkdirAll(filepath.Join(repoPath, ".repotale"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -21,8 +18,80 @@ func TestLoadSystemPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := loadSystemPrompt(repoPath); got != custom {
+	// empty reader: if the override didn't short-circuit, promptTone would
+	// block reading from it and this test would hang instead of failing fast.
+	reader := bufio.NewReader(strings.NewReader(""))
+	got, err := loadSystemPrompt(repoPath, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != custom {
 		t.Errorf("loadSystemPrompt() = %q, want custom prompt %q", got, custom)
+	}
+}
+
+func TestLoadSystemPrompt_NoOverrideUsesPresetChoice(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	repoPath := t.TempDir()
+
+	reader := bufio.NewReader(strings.NewReader("hard\nen\n"))
+	got, err := loadSystemPrompt(repoPath, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	preset, err := loadPreset("hard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := preset + analysisLanguageDirective(langEN)
+	if got != want {
+		t.Errorf("loadSystemPrompt() did not return the hard preset + the chosen output-language directive")
+	}
+}
+
+func TestPromptTone(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := ensurePresetsOnDisk(); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := map[string]string{
+		"soft\n":      "soft",
+		"hard\n":      "hard",
+		"\n":          defaultPreset, // empty input -> default
+		"bogus\n":     defaultPreset, // unknown name -> falls back to default
+		"  medium \n": "medium",      // surrounding whitespace trimmed
+	}
+	for input, want := range cases {
+		got := promptTone(bufio.NewReader(strings.NewReader(input)))
+		if got != want {
+			t.Errorf("promptTone(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestEnsurePresetsOnDiskDoesNotClobberEdits(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if err := ensurePresetsOnDisk(); err != nil {
+		t.Fatal(err)
+	}
+	edited := "내가 고친 프리셋"
+	path := filepath.Join(presetsDir(), "soft.md")
+	if err := os.WriteFile(path, []byte(edited), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ensurePresetsOnDisk(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadPreset("soft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != edited {
+		t.Errorf("ensurePresetsOnDisk() overwrote a user-edited preset")
 	}
 }
 

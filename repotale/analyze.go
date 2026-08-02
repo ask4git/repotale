@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,26 +13,14 @@ import (
 
 const analyzeJSONSchema = `{"type":"object","properties":{"title":{"type":"string"},"excerpt":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["title","excerpt","tags"],"additionalProperties":false}`
 
-// mirrors web/lib/pipeline/generate-post.ts's SYSTEM_PROMPT, adapted for a
-// single commit (subject/body/diff) instead of a PR (title/body/diff).
-const analyzeSystemPrompt = `당신은 이 repository의 커밋을 비개발자도 읽을 수 있는 개발 블로그 글로 바꾸는 역할입니다.
+//go:embed presets/*.md
+var presetsFS embed.FS
 
-입력: 커밋 메시지, 전체 diff
+// spectrum from narrative/warm to dry/formal. ponytail: add "xsoft"/"xhard"
+// here + presets/xsoft.md, presets/xhard.md when that's actually needed.
+var presetNames = []string{"soft", "medium", "hard"}
 
-먼저 아래 네 가지 관점에서 변경사항을 분석하세요:
-- What: 어떤 기능이 생겼나 - 사용자 관점 언어로, 기술 용어 최소화
-- Where: 어느 파일/모듈에 들어갔나 - 아키텍처 위치를 비유로 설명
-- How: 어떤 방식으로 구현했나 - 기술 선택을 평이한 언어로, "왜 이 방법인지"까지
-- Why: 판단 근거 - diff와 커밋 메시지에서 추론한 의사결정 서사. 없는 근거를 지어내지 말고, 원문에 있는 이유만 사용
-
-톤: 기술 문서가 아니라 개발 블로그 글이어야 합니다. "오늘 ~에 ~를 붙였습니다. ~때문인데요" 수준의 문장.
-
-이 분석을 바탕으로 다음 필드를 채워 응답하세요:
-- title: 블로그 포스트 제목 (한국어, 한 문장)
-- excerpt: What을 중심으로 한 2~4문장 요약 (위 톤을 유지)
-- tags: 1~3개의 짧은 영문 소문자 태그 (예: "feature", "bugfix")
-
-hallucination 방지: 커밋 메시지와 diff에 없는 사실을 지어내지 마세요.`
+const defaultPreset = "soft"
 
 type localPost struct {
 	Slug        string   `json:"slug"`
@@ -49,30 +38,32 @@ type generatedFields struct {
 	Tags    []string `json:"tags"`
 }
 
-func cmdAnalyze() {
-	repoPath, err := filepath.Abs(promptRepoPath())
+func cmdAnalyze(stdin *bufio.Reader) {
+	repoPath, err := filepath.Abs(promptRepoPath(stdin))
 	if err != nil {
 		die(err)
 	}
 	if !isGitRepo(repoPath) {
-		die(fmt.Errorf("%s is not a git repository", repoPath))
+		die(fmt.Errorf(t("not_git_repo"), repoPath))
 	}
 
 	// ponytail: only one model adapter for now (Claude Code, via the locally
 	// authenticated `claude` CLI) - add a picker prompt when a second one lands.
 	if _, err := exec.LookPath("claude"); err != nil {
-		die(fmt.Errorf("claude CLI not found in PATH - install Claude Code first (https://claude.com/claude-code); it's the only supported model right now"))
+		die(fmt.Errorf("%s", t("claude_not_found")))
 	}
-	fmt.Println("model: Claude Code (claude CLI, using your local login)")
-
-	systemPrompt := loadSystemPrompt(repoPath)
+	fmt.Println(t("analyze_model_line"))
+	if !confirm(stdin, t("analyze_confirm_claude")) {
+		fmt.Println(t("cancelled"))
+		return
+	}
 
 	shas, err := recentCommits(repoPath, 10)
 	if err != nil {
 		die(fmt.Errorf("reading git log: %w", err))
 	}
 	if len(shas) == 0 {
-		fmt.Println("no commits found")
+		fmt.Println(t("no_commits"))
 		return
 	}
 
@@ -82,18 +73,39 @@ func cmdAnalyze() {
 		die(err)
 	}
 
-	fmt.Printf("analyzing %d commit(s) in %s...\n", len(shas), repoPath)
+	newShas, estTokens, err := planAnalysis(repoPath, outDir, shas)
+	if err != nil {
+		die(err)
+	}
+
+	var systemPrompt string
+	if len(newShas) == 0 {
+		fmt.Println(t("no_new_commits"))
+	} else {
+		fmt.Println(t("token_estimate", len(newShas), estTokens))
+		if !confirm(stdin, t("confirm_proceed")) {
+			fmt.Println(t("cancelled"))
+			return
+		}
+
+		systemPrompt, err = loadSystemPrompt(repoPath, stdin)
+		if err != nil {
+			die(err)
+		}
+	}
+
+	fmt.Println(t("analyzing_line", len(shas), repoPath))
 	saved := 0
 	for _, sha := range shas {
 		postPath := filepath.Join(outDir, sha[:7]+".json")
 		if _, err := os.Stat(postPath); err == nil {
-			fmt.Printf("  %s (already analyzed, skipping)\n", sha[:7])
+			fmt.Println(t("already_analyzed", sha[:7]))
 			continue
 		}
 
 		post, err := analyzeCommit(repoPath, sha, systemPrompt)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  skip %s: %v\n", sha[:7], err)
+			fmt.Fprintln(os.Stderr, t("skip_error", sha[:7], err))
 			continue
 		}
 		data, err := json.MarshalIndent(post, "", "  ")
@@ -103,7 +115,7 @@ func cmdAnalyze() {
 		if err := os.WriteFile(postPath, data, 0644); err != nil {
 			die(err)
 		}
-		fmt.Printf("  %s %s  (claude session %s)\n", sha[:7], post.Title, post.SessionID)
+		fmt.Println(t("post_line", sha[:7], post.Title, post.SessionID))
 		saved++
 	}
 
@@ -112,23 +124,50 @@ func cmdAnalyze() {
 		die(err)
 	}
 	if len(posts) == 0 {
-		fmt.Println("\nno posts to show")
+		fmt.Println()
+		fmt.Println(t("no_posts"))
 		return
 	}
 
-	fmt.Printf("\n%d new, %d total post(s) in %s\n", saved, len(posts), outDir)
+	fmt.Println()
+	fmt.Println(t("summary_line", saved, len(posts), outDir))
 	if err := serveLocal(repoID, posts); err != nil {
 		die(err)
 	}
 }
 
-func promptRepoPath() string {
+func confirm(reader *bufio.Reader, question string) bool {
+	fmt.Printf("%s (y/n) [n]: ", question)
+	line, _ := reader.ReadString('\n')
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes"
+}
+
+// planAnalysis figures out which commits still need analysis and gives a
+// rough token estimate (~4 chars/token) from their diff size, without
+// calling claude - so the cost is visible before it's spent.
+func planAnalysis(repoPath, outDir string, shas []string) (newShas []string, estTokens int, err error) {
+	for _, sha := range shas {
+		postPath := filepath.Join(outDir, sha[:7]+".json")
+		if _, err := os.Stat(postPath); err == nil {
+			continue
+		}
+		diff, err := commitDiff(repoPath, sha)
+		if err != nil {
+			return nil, 0, fmt.Errorf("reading commit diff: %w", err)
+		}
+		newShas = append(newShas, sha)
+		estTokens += len(diff) / 4
+	}
+	return newShas, estTokens, nil
+}
+
+func promptRepoPath(reader *bufio.Reader) string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		die(err)
 	}
-	fmt.Printf("분석할 repo 경로 [%s]: ", cwd)
-	reader := bufio.NewReader(os.Stdin)
+	fmt.Print(t("repo_path_prompt", cwd))
 	line, _ := reader.ReadString('\n')
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -180,15 +219,105 @@ func repoIdentifier(repoPath string) string {
 	return id
 }
 
-// loadSystemPrompt lets a repo fully override the analysis prompt via
-// .repotale/prompt.md (mirrors CLAUDE.md: a project-checked-in file that
-// customizes agent behavior). Falls back to the built-in default.
-func loadSystemPrompt(repoPath string) string {
-	custom, err := os.ReadFile(filepath.Join(repoPath, ".repotale", "prompt.md"))
-	if err != nil {
-		return analyzeSystemPrompt
+// loadSystemPrompt resolves the analysis prompt with this precedence:
+//  1. .repotale/prompt.md in the target repo (full override, mirrors
+//     CLAUDE.md - a project-checked-in file that customizes agent behavior).
+//     When present, the tone/output-language pickers are skipped entirely -
+//     full override means full control, no prompts, no injected directives.
+//  2. a tone preset the user picks interactively, backed by an editable file
+//     under ~/.repotale/presets/, plus an explicit output-language directive
+//     (independent of the tone - and of the CLI's own UI language).
+func loadSystemPrompt(repoPath string, reader *bufio.Reader) (string, error) {
+	if custom, err := os.ReadFile(filepath.Join(repoPath, ".repotale", "prompt.md")); err == nil {
+		return string(custom), nil
 	}
-	return string(custom)
+
+	if err := ensurePresetsOnDisk(); err != nil {
+		return "", fmt.Errorf("setting up presets: %w", err)
+	}
+	preset, err := loadPreset(promptTone(reader))
+	if err != nil {
+		return "", err
+	}
+
+	outputLang := promptAnalysisLanguage(reader)
+	return preset + analysisLanguageDirective(outputLang), nil
+}
+
+func presetsDir() string {
+	return filepath.Join(repotaleDir(), "presets")
+}
+
+// ensurePresetsOnDisk writes the built-in presets to ~/.repotale/presets/
+// the first time, so they're a plain editable file - same pattern as
+// CLAUDE.md. Never overwrites a file that's already there, in case the user
+// edited their own copy.
+func ensurePresetsOnDisk() error {
+	dir := presetsDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	for _, name := range presetNames {
+		path := filepath.Join(dir, name+".md")
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		content, err := presetsFS.ReadFile("presets/" + name + ".md")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, content, 0644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadPreset(name string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(presetsDir(), name+".md"))
+	if err != nil {
+		return "", fmt.Errorf("reading preset %q: %w", name, err)
+	}
+	return string(data), nil
+}
+
+func promptTone(reader *bufio.Reader) string {
+	fmt.Print(t("tone_prompt", strings.Join(presetNames, "/"), defaultPreset))
+	line, _ := reader.ReadString('\n')
+	tone := strings.TrimSpace(line)
+	if tone == "" {
+		return defaultPreset
+	}
+	for _, name := range presetNames {
+		if tone == name {
+			return tone
+		}
+	}
+	fmt.Println(t("tone_unknown", tone, defaultPreset))
+	return defaultPreset
+}
+
+// promptAnalysisLanguage asks what language the generated posts should be
+// written in - independent of currentLang (the CLI's own UI language), but
+// defaulting to it since that's usually what's wanted.
+func promptAnalysisLanguage(reader *bufio.Reader) lang {
+	fmt.Print(t("analysis_language_prompt", currentLang))
+	line, _ := reader.ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "en":
+		return langEN
+	case "ko":
+		return langKO
+	default:
+		return currentLang
+	}
+}
+
+func analysisLanguageDirective(l lang) string {
+	if l == langEN {
+		return "\n\nOutput language: write the title and excerpt entirely in English."
+	}
+	return "\n\n출력 언어: title과 excerpt를 반드시 한국어로 작성하세요."
 }
 
 func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, error) {
@@ -211,7 +340,7 @@ func analyzeCommit(repoPath, sha, systemPrompt string) (localPost, error) {
 		diff = diff[:maxDiffLen] + "\n...(truncated)"
 	}
 
-	prompt := systemPrompt + "\n\n커밋 메시지:\n" + message + "\n\ndiff:\n" + diff
+	prompt := systemPrompt + "\n\ncommit message:\n" + message + "\n\ndiff:\n" + diff
 	fields, sessionID, err := runClaude(prompt)
 	if err != nil {
 		return localPost{}, err

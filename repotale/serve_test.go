@@ -6,31 +6,47 @@ import (
 	"testing"
 )
 
-func TestLocalTmplRendersSessionID(t *testing.T) {
-	data := struct {
-		RepoID string
-		Posts  []localPost
-	}{
-		RepoID: "my-project",
-		Posts: []localPost{
-			{
-				Slug:        "abc1234",
-				Title:       "테스트 포스트",
-				Excerpt:     "세션ID 렌더 확인용",
-				Tags:        []string{"test"},
-				CommitSHA:   "abc1234567890",
-				PublishedAt: "2026-08-02",
-				SessionID:   "6c33497a-9e62-43c1-9620-15a44f7ed573",
-			},
-		},
-	}
+type localPageData struct {
+	Lang         string
+	RepoID       string
+	Posts        []localPost
+	Heading      string
+	Empty        string
+	CommitLabel  string
+	SessionLabel string
+}
 
+func renderLocalPage(t *testing.T, posts []localPost) string {
+	t.Helper()
+	data := localPageData{
+		Lang:         "en",
+		RepoID:       "my-project",
+		Posts:        posts,
+		Heading:      "What's been happening in this repo",
+		Empty:        "No analysis yet.",
+		CommitLabel:  "commit",
+		SessionLabel: "claude session",
+	}
 	var buf bytes.Buffer
 	if err := localTmpl.Execute(&buf, data); err != nil {
 		t.Fatal(err)
 	}
+	return buf.String()
+}
 
-	out := buf.String()
+func TestLocalTmplRendersSessionID(t *testing.T) {
+	out := renderLocalPage(t, []localPost{
+		{
+			Slug:        "abc1234",
+			Title:       "테스트 포스트",
+			Excerpt:     "세션ID 렌더 확인용",
+			Tags:        []string{"test"},
+			CommitSHA:   "abc1234567890",
+			PublishedAt: "2026-08-02",
+			SessionID:   "6c33497a-9e62-43c1-9620-15a44f7ed573",
+		},
+	})
+
 	if !strings.Contains(out, "6c33497a-9e62-43c1-9620-15a44f7ed573") {
 		t.Errorf("rendered page missing session id, got:\n%s", out)
 	}
@@ -40,21 +56,10 @@ func TestLocalTmplRendersSessionID(t *testing.T) {
 }
 
 func TestLocalTmplOmitsSessionIDWhenEmpty(t *testing.T) {
-	data := struct {
-		RepoID string
-		Posts  []localPost
-	}{
-		RepoID: "my-project",
-		Posts: []localPost{
-			{Slug: "abc1234", Title: "t", CommitSHA: "abc1234567890", PublishedAt: "2026-08-02"},
-		},
-	}
-
-	var buf bytes.Buffer
-	if err := localTmpl.Execute(&buf, data); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(buf.String(), "claude session") {
+	out := renderLocalPage(t, []localPost{
+		{Slug: "abc1234", Title: "t", CommitSHA: "abc1234567890", PublishedAt: "2026-08-02"},
+	})
+	if strings.Contains(out, "claude session") {
 		t.Errorf("expected no session id text for a post with an empty SessionID")
 	}
 }
