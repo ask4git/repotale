@@ -17,8 +17,8 @@ func die(err error) {
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
-		os.Exit(1)
+		cmdAnalyze()
+		return
 	}
 
 	switch os.Args[1] {

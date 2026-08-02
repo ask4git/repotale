@@ -14,8 +14,9 @@ web/*.tsbuildinfo
 web/next-env.d.ts
 
 # go / cli
-cli/bin/
-cli/dist/
+repotale/repotale
+repotale/bin/
+repotale/dist/
 *.exe
 
 # docker
