@@ -14,7 +14,7 @@
 repo 안에서 실행하면 최근 커밋을 읽고, 그 내용을 로컬 웹 화면에 블로그 형태로 보여줍니다.
 
 ```bash
-go install github.com/ask4git/repotale/repotale@v0.1.1 && export PATH="$PATH:$(go env GOPATH)/bin" && repotale
+go install github.com/ask4git/repotale/repotale@v0.1.2 && export PATH="$PATH:$(go env GOPATH)/bin" && repotale
 ```
 
 `go install`은 컴파일만 담당하는 Go 툴체인 명령이라 설치 과정 중에는 아무것도 출력하지 않습니다(npm의 postinstall 같은 훅이 Go에는 없습니다). 그래서 설치, PATH 설정, 첫 실행을 한 줄로 이어붙여 설치 직후 바로 아래 화면을 볼 수 있게 했습니다.
@@ -25,7 +25,7 @@ go install github.com/ask4git/repotale/repotale@v0.1.1 && export PATH="$PATH:$(g
 릴리즈 직후라 Go 모듈 프록시나 체크섬 DB가 해당 버전을 아직 인덱싱하지 못했을 가능성이 있습니다. 보통 며칠 안에 자연스럽게 해결됩니다. 급하다면 아래처럼 우회할 수 있습니다.
 
 ```bash
-GOPROXY=direct GOSUMDB=off go install github.com/ask4git/repotale/repotale@v0.1.1
+GOPROXY=direct GOSUMDB=off go install github.com/ask4git/repotale/repotale@v0.1.2
 ```
 
 `GOSUMDB=off`는 체크섬 검증을 끄는 옵션이므로 임시 우회용으로만 사용하고, 평소에는 기본 명령을 그대로 쓰는 것을 권장합니다.
@@ -121,7 +121,7 @@ docker-compose.yml  web + Postgres 실행 (원격 연동 모드용)
 [Claude Code](https://claude.com/claude-code)를 설치하고 로그인만 되어 있으면 됩니다. 별도 API 키는 필요하지 않습니다.
 
 ```bash
-go install github.com/ask4git/repotale/repotale@v0.1.1  # 또는: make cli-build
+go install github.com/ask4git/repotale/repotale@v0.1.2  # 또는: make cli-build
 repotale            # 분석하고 싶은 repo 안에서 실행
 ```
 
