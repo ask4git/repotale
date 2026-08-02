@@ -31,6 +31,10 @@ func main() {
 		cmdOpen()
 	case "--version", "-v", "version":
 		cmdVersion()
+	case "update":
+		cmdUpdate()
+	case "-h", "--help", "help":
+		usage()
 	default:
 		usage()
 		os.Exit(1)
@@ -38,7 +42,35 @@ func main() {
 }
 
 func usage() {
-	fmt.Println("usage: repotale [<login|connect <owner/repo>|open|--version>]")
+	fmt.Println(`usage: repotale [command]
+
+with no command: analyze the local repo's recent commits (prompts for
+repo path and requires the claude CLI, logged in, in PATH)
+
+commands:
+  login              log in with a GitHub personal access token
+  connect <owner/repo>  connect a GitHub repo
+  open               open the connected repo's web dashboard
+  update             go install the latest version of repotale
+  -h, --help         show this help
+  -v, --version      show version`)
+}
+
+const modulePath = "github.com/ask4git/repotale/repotale"
+
+func cmdUpdate() {
+	if _, err := exec.LookPath("go"); err != nil {
+		die(fmt.Errorf("go not found in PATH - needed to update (https://go.dev/dl)"))
+	}
+
+	fmt.Println("updating via go install", modulePath+"@latest ...")
+	cmd := exec.Command("go", "install", modulePath+"@latest")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		die(fmt.Errorf("update failed: %w", err))
+	}
+	fmt.Println("updated")
 }
 
 func cmdVersion() {
