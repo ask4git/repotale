@@ -1,6 +1,6 @@
 APP_ENV ?= local
 
-.PHONY: up down logs dev env cli-build cli-login cli-connect cli-open
+.PHONY: up down logs dev env cli-build cli-login cli-connect cli-open cli-release
 
 up: env ## start web+db via docker-compose
 	docker-compose up
@@ -28,3 +28,11 @@ cli-connect: cli-build
 
 cli-open: cli-build
 	cd repotale && ./repotale open
+
+# the module lives in a subdirectory, so its tags must be prefixed
+# "repotale/" (e.g. `make cli-release VERSION=v0.1.1`) - a bare vX.Y.Z tag
+# is read as tagging a (nonexistent) module at the repo root instead.
+cli-release:
+	test -n "$(VERSION)" # usage: make cli-release VERSION=v0.1.1
+	git tag -a repotale/$(VERSION) -m "repotale CLI $(VERSION)"
+	git push origin repotale/$(VERSION)

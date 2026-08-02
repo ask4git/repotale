@@ -14,10 +14,12 @@
 repo 안에서 실행하면, 최근 커밋을 읽고 로컬 웹 화면에 블로그로 띄운다.
 
 ```bash
-go install github.com/ask4git/repotale/repotale@latest
+go install github.com/ask4git/repotale/repotale@v0.1.0
 export PATH="$PATH:$(go env GOPATH)/bin"  # 이미 PATH에 있으면 스킵됨, `repotale`이 바로 실행되면 필요 없음
 repotale
 ```
+
+버전 태그(`@v0.1.0`) 대신 `@latest` 쓰면 방금 push된 커밋을 Go 모듈 프록시가 아직 못 봐서 옛날 버전이 깔릴 수 있음 - 태그 박힌 버전이 제일 확실함. 이후 업데이트는 `repotale update`.
 
 `command not found: repotale`이 뜨면 Go의 설치 경로(`~/go/bin`)가 PATH에 없는 것 - 위 `export` 한 줄이면 그 세션에서 바로 해결되고, 매번 새 터미널에서도 되게 하려면:
 
@@ -104,7 +106,7 @@ docker-compose.yml  web + Postgres 실행 (원격 연동 모드용)
 필요한 건 [Claude Code](https://claude.com/claude-code) 설치 + 로그인뿐. API 키 불필요.
 
 ```bash
-go install github.com/ask4git/repotale/repotale@latest  # 또는: make cli-build
+go install github.com/ask4git/repotale/repotale@v0.1.0  # 또는: make cli-build
 repotale            # 분석하고 싶은 repo에서
 ```
 

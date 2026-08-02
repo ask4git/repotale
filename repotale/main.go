@@ -64,7 +64,9 @@ func cmdUpdate() {
 	cmd := exec.Command("go", "install", modulePath+"@latest")
 	// GOPROXY=direct: proxy.golang.org caches @latest for a while, which would
 	// otherwise make `update` reinstall a stale version right after a fresh push.
-	cmd.Env = append(os.Environ(), "GOPROXY=direct")
+	// GOSUMDB=off: sum.golang.org has its own separate propagation delay and
+	// 404s on a version it hasn't indexed yet, even with GOPROXY=direct.
+	cmd.Env = append(os.Environ(), "GOPROXY=direct", "GOSUMDB=off")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
